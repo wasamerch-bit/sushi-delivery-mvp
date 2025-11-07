@@ -222,7 +222,7 @@ fastify.get('/dashboard/overview', async (req, reply) => {
 
 const start = async () => {
   try {
-    await fastify.listen({ port: 3000, host: '0.0.0.0' });
+    const PORT = process.env.PORT || 3000; await fastify.listen({ port: Number(PORT), host: '0.0.0.0' });
     fastify.log.info('Mock server running on http://0.0.0.0:3000');
   } catch (err) {
     fastify.log.error(err);
