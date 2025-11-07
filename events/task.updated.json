@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "task.updated",
+  "type": "object",
+  "required": [
+    "event_id",
+    "timestamp",
+    "task"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order_id": {
+          "type": "string"
+        },
+        "station": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "claimed_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "changes": {
+      "type": "object",
+      "description": "Optional, beschreibt was sich ge\u00e4ndert hat"
+    }
+  }
+}

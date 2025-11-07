@@ -1,0 +1,452 @@
+openapi: 3.0.3
+info:
+  title: SushiDelivery MVP API
+  version: "1.0.0"
+  description: Minimal OpenAPI Spec für Order-Ingest, KDS/Tasks, Driver-Dispatch, QC (Foto), Checklists und Dashboard.
+servers:
+  - url: https://api.yoursushi.example.com/api/v1
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        zip:
+          type: string
+        city:
+          type: string
+        lat:
+          type: number
+          format: float
+        lng:
+          type: number
+          format: float
+    OrderItem:
+      type: object
+      required: [sku, qty, prep_time, station]
+      properties:
+        sku:
+          type: string
+        qty:
+          type: integer
+        prep_time:
+          type: integer
+          description: Sekunden (geschätzte Produktionsdauer)
+        station:
+          type: string
+          description: sushi|hot|cutter|packing
+    Order:
+      type: object
+      required: [order_id, channel, items]
+      properties:
+        order_id:
+          type: string
+        channel:
+          type: string
+          example: lieferando
+        channel_order_id:
+          type: string
+        customer_name:
+          type: string
+        customer_phone:
+          type: string
+        delivery_address:
+          $ref: '#/components/schemas/Address'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        requested_time:
+          type: string
+          format: date-time
+        priority:
+          type: integer
+          description: Höher = höhere Priorität
+    OrderCreateEvent:
+      type: object
+      properties:
+        event_id:
+          type: string
+        source:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        order:
+          $ref: '#/components/schemas/Order'
+    Task:
+      type: object
+      required: [id, order_id, station, status]
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        station:
+          type: string
+          enum: [sushi, cutter, hot, packing]
+        status:
+          type: string
+          enum: [pending, claimed, in_progress, done, blocked]
+        claimed_by:
+          type: string
+          nullable: true
+        estimated_time:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+    DriverStatus:
+      type: object
+      properties:
+        driver_id:
+          type: string
+        status:
+          type: string
+          enum: [available, assigned, on_trip, off_shift]
+        location:
+          $ref: '#/components/schemas/Address'
+    Tour:
+      type: object
+      properties:
+        tour_id:
+          type: string
+        driver_id:
+          type: string
+        orders:
+          type: array
+          items:
+            type: object
+            properties:
+              order_id:
+                type: string
+              eta:
+                type: string
+                format: date-time
+        estimated_total_time:
+          type: integer
+    PhotoUploadResponse:
+      type: object
+      properties:
+        photo_id:
+          type: string
+        url:
+          type: string
+    Checklist:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        entries:
+          type: object
+        done_by:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+  parameters:
+    stationParam:
+      name: station
+      in: query
+      schema:
+        type: string
+      description: Filter für station view (sushi|hot|cutter|packing)
+
+paths:
+  /webhook/orders:
+    post:
+      summary: Externer Order Webhook (Sides/Lieferando/Website) - idempotent
+      description: Empfängt Channel-Payloads. Adapter normalisiert in internes Schema. Muss `channel_order_id` enthalten.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateEvent'
+      responses:
+        '200':
+          description: Order accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  order_id:
+                    type: string
+        '409':
+          description: Duplicate (idempotency)
+  /orders:
+    get:
+      summary: List orders (filter by state/station)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: state
+          schema:
+            type: string
+          description: Filter by order state
+        - $ref: '#/components/parameters/stationParam'
+      responses:
+        '200':
+          description: Orders list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+  /orders/{orderId}:
+    get:
+      summary: Get order details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+  /orders/{orderId}/state:
+    post:
+      summary: Change order state (used by services/tasks)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state, by]
+              properties:
+                state:
+                  type: string
+                  description: received|in_preparation|ready_for_pack|ready_for_driver|on_the_way|delivered|cancelled
+                by:
+                  type: string
+      responses:
+        '200':
+          description: State changed
+  /tasks:
+    get:
+      summary: Get tasks for KDS / station
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: station
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+  /tasks/{taskId}/claim:
+    post:
+      summary: Claim a task (KDS)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id:
+                  type: string
+      responses:
+        '200':
+          description: Claimed
+  /tasks/{taskId}/status:
+    post:
+      summary: Update task status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, by]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, claimed, in_progress, done, blocked]
+                by:
+                  type: string
+      responses:
+        '200':
+          description: Updated
+  /drivers/{driverId}/status:
+    post:
+      summary: Update driver status & location (Driver App)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverStatus'
+      responses:
+        '200':
+          description: OK
+  /drivers/{driverId}/accept_tour:
+    post:
+      summary: Driver accepts a dispatched tour
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tour_id]
+              properties:
+                tour_id:
+                  type: string
+      responses:
+        '200':
+          description: Tour accepted
+  /drivers/{driverId}/confirm_delivery:
+    post:
+      summary: Driver confirms delivery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id]
+              properties:
+                order_id:
+                  type: string
+                signature_url:
+                  type: string
+                photo_url:
+                  type: string
+      responses:
+        '200':
+          description: Delivery confirmed
+  /orders/{orderId}/photo:
+    post:
+      summary: Upload packing photo (multipart)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+                uploaded_by:
+                  type: string
+      responses:
+        '201':
+          description: Photo uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoUploadResponse'
+  /checklists:
+    post:
+      summary: Submit checklist (fridge, startup, packing)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Checklist'
+      responses:
+        '201':
+          description: Checklist saved
+  /dashboard/overview:
+    get:
+      summary: Dashboard KPI snapshot
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: KPIs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  open_orders:
+                    type: integer
+                  in_production:
+                    type: integer
+                  on_the_way:
+                    type: integer
+                  delivered:
+                    type: integer
+                  avg_prep_time_seconds:
+                    type: integer
+                  avg_delivery_time_seconds:
+                    type: integer
+
+tags:
+  - name: ingest
+    description: Order ingestion endpoints
+  - name: kds
+    description: Kitchen display system tasks
+  - name: driver
+    description: Driver app / dispatch
+  - name: qc
+    description: Quality control, photos and checklists
+  - name: dashboard
+    description: Reporting & KPI

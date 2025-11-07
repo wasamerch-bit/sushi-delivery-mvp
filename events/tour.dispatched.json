@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tour.dispatched",
+  "type": "object",
+  "required": [
+    "event_id",
+    "timestamp",
+    "tour"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tour": {
+      "type": "object",
+      "properties": {
+        "tour_id": {
+          "type": "string"
+        },
+        "driver_id": {
+          "type": "string"
+        },
+        "orders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "order_id": {
+                "type": "string"
+              },
+              "eta": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        },
+        "estimated_total_time": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
