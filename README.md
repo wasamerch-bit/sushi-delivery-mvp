@@ -13,3 +13,4 @@ Inhalt:
 
 Wichtig:
 Ich kann den Code hier nicht für dich dauerhaft hosten oder live ausführen. Du kannst die beiliegenden Artefakte lokal starten oder auf einem kostenlosen Cloud-Anbieter deployen (z.B. Render, Railway, Vercel für frontends). Folge deploy_instructions.md für konkrete Schritte.
+# sushi_delivery_mvp
